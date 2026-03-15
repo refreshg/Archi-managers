@@ -1,7 +1,7 @@
 /**
  * Vercel serverless: Bitrix24 ლისტის ელემენტების proxy (CORS-ის და 404-ის თავიდან ასაცილებლად)
  * GET /api/report?start=0
- * ლისტი 82 – ზუსტად იმ ჩანაწერების წამოღება (60). ფილტრი IBLOCK_SECTION_ID=82 იძლევა მხოლოდ ამ სექციის ელემენტებს.
+ * ლისტი 82 (IBLOCK_ID=82). ჩანაწერების რაოდენობა ფრონტზე ლიმიტირებულია 60-ით.
  */
 const BITRIX_WEBHOOK = process.env.BITRIX_WEBHOOK_URL || 'https://crm.archi.ge/rest/1/0g8qitmb87y5jl7g';
 const LIST_ID = 82;
@@ -12,14 +12,12 @@ module.exports = async function handler(req, res) {
     return;
   }
   const start = Math.max(0, parseInt(req.query.start, 10) || 0);
-  const useSectionFilter = req.query.section_filter !== '0';
 
   const params = new URLSearchParams({
     IBLOCK_TYPE_ID: 'lists',
     IBLOCK_ID: String(LIST_ID),
     NAV_START: String(start),
   });
-  if (useSectionFilter) params.set('FILTER[IBLOCK_SECTION_ID]', String(LIST_ID));
   const url = `${BITRIX_WEBHOOK}/lists.element.get.json?${params.toString()}`;
   try {
     const r = await fetch(url);
