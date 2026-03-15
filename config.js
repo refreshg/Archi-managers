@@ -24,9 +24,8 @@ module.exports = {
    * პირველი გაშვების შემდეგ შეამოწმეთ console-ში result[0] და შეცვალეთ keys
    */
   fields: {
-    project: 'PROPERTY_1472',      // პროექტი (შეიძლება იყოს PROPERTY_XXX ან სხვა)
-    floorFrom: 'PROPERTY_1474',    // სართული-დან
-    floorTo: 'PROPERTY_1476',      // სართული-მდე
-    responsible: 'PROPERTY_1478',  // პასუხისმგებელი (მენეჯერი)
+    project: 'PROPERTY_430',       // პროექტი
+    floors: 'PROPERTY_1033',       // სართულები
+    responsible: 'PROPERTY_434',   // პასუხისმგებელი
   },
 };

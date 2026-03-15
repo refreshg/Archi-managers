@@ -101,55 +101,59 @@ function getField(element, key) {
   return null;
 }
 
+function parseFloors(val) {
+  if (val == null) return '';
+  if (Array.isArray(val)) return val.map(String).filter(Boolean).join(', ');
+  if (typeof val === 'object' && val.value != null) return String(val.value);
+  return String(val).trim();
+}
+
+function parseManager(val) {
+  if (val == null || typeof val !== 'object') return { key: String(val || '—'), name: String(val || '—'), email: '', number: '', internal: '' };
+  const name = val.title ?? val.name ?? val.NAME ?? val.value ?? '';
+  const email = val.email ?? val.EMAIL ?? '';
+  const number = val.phone ?? val.phoneNumber ?? val.number ?? val.NUMBER ?? '';
+  const internal = val.internalNumber ?? val.internal ?? '';
+  const key = email || name || (number + internal) || '—';
+  return { key: String(key), name: String(name || '—'), email: String(email), number: String(number), internal: String(internal) };
+}
+
 /**
- * პროექტი, სართულები და პასუხისმგებელი ობიექტიდან
+ * პროექტი (430), სართულები (1033), პასუხისმგებელი (434)
  */
 function parseElement(el) {
   let project = getField(el, 'project') ?? getField(el, 'NAME') ?? '';
   if (project && typeof project === 'object') project = project.name ?? project.title ?? project.value ?? project.NAME ?? '';
-  const floorFrom = parseInt(getField(el, 'floorFrom'), 10);
-  const floorTo = parseInt(getField(el, 'floorTo'), 10);
-  let responsible = getField(el, 'responsible') ?? '';
-
-  if (responsible && typeof responsible === 'object') {
-    responsible = responsible.title || responsible.value || responsible.NAME || JSON.stringify(responsible);
-  }
-
-  const fromOk = Number.isFinite(floorFrom);
-  const toOk = Number.isFinite(floorTo);
-  let floorRange = '';
-  if (fromOk && toOk) {
-    floorRange = floorFrom === floorTo ? String(floorFrom) : `${floorFrom}-${floorTo}`;
-  } else if (fromOk) floorRange = String(floorFrom);
-  else if (toOk) floorRange = String(floorTo);
-
-  return { project: String(project).trim(), floorFrom, floorTo, floorRange, responsible: String(responsible).trim() };
+  const floorsRaw = getField(el, 'floors');
+  const floorRange = parseFloors(floorsRaw);
+  const responsibleRaw = getField(el, 'responsible');
+  const manager = parseManager(responsibleRaw);
+  return { project: String(project).trim(), floorRange, manager };
 }
 
 /**
- * უნიკალური მენეჯერები და პროექტები, პივოტი: project -> manager -> [ floor ranges ]
+ * უნიკალური მენეჯერები და პროექტები, პივოტი: project -> managerKey -> [ floor ranges ]
  */
 function buildPivot(elements) {
   const byProject = new Map();
-  const managersSet = new Set();
+  const managersMap = new Map();
 
   for (const el of elements) {
-    const { project, floorRange, responsible } = parseElement(el);
-    if (!project || !floorRange) continue;
-
-    managersSet.add(responsible || '—');
-
+    const { project, floorRange, manager } = parseElement(el);
+    if (!project) continue;
+    const floorStr = (floorRange || '').trim();
+    if (!floorStr) continue;
+    const key = manager.key;
+    managersMap.set(key, manager);
     if (!byProject.has(project)) byProject.set(project, new Map());
     const managers = byProject.get(project);
-    if (!managers.has(responsible || '—')) managers.set(responsible || '—', []);
-    managers.get(responsible || '—').push(floorRange);
+    if (!managers.has(key)) managers.set(key, []);
+    managers.get(key).push(floorStr);
   }
 
-  const managers = Array.from(managersSet).sort((a, b) => a.localeCompare(b, 'ka'));
+  const managers = Array.from(managersMap.entries()).sort((a, b) => (a[1].name || a[0]).localeCompare((b[1].name || b[0]), 'ka'));
   const projects = Array.from(byProject.keys()).sort((a, b) => a.localeCompare(b, 'ka'));
-
-  const pivot = { projects, managers, byProject };
-  return pivot;
+  return { projects, managers, byProject };
 }
 
 /**
@@ -161,21 +165,21 @@ function mergeRanges(ranges) {
 }
 
 /**
- * HTML ცხრილი: პროექტები რიგებში, მენეჯერები სვეტებში
+ * HTML ცხრილი: პროექტები რიგებში, მენეჯერები სვეტებში (სახელი, Email, Number, შიდა ნომერი)
  */
 function buildHtml(pivot) {
   const { projects, managers, byProject } = pivot;
 
   const headCells = managers
     .map(
-      (m) =>
-        `<th scope="col" style="padding:8px 10px; border:1px solid #ddd;">${escapeHtml(m)}</th>`
+      ([key, m]) =>
+        `<th scope="col" style="padding:8px 10px; border:1px solid #ddd;"><div>${escapeHtml(m.name || '—')}</div><div style="font-size:0.85em; font-weight:normal;">${m.email ? escapeHtml(m.email) + '<br>' : ''}${m.number || ''}${m.internal ? ' / ' + escapeHtml(m.internal) : ''}</div></th>`
     )
     .join('');
 
   const rows = projects.map((project) => {
-    const managerCells = managers.map((manager) => {
-      const ranges = byProject.get(project)?.get(manager) ?? [];
+    const managerCells = managers.map(([key]) => {
+      const ranges = byProject.get(project)?.get(key) ?? [];
       const text = mergeRanges(ranges);
       return `<td style="padding:8px 10px; border:1px solid #ddd; background:${text ? '#e3f2fd' : 'transparent'}">${escapeHtml(text)}</td>`;
     });
