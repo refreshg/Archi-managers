@@ -15,14 +15,16 @@
 </head>
 <body>
   <h1>სერვის მენეჯერების რეპორტი</h1>
+  <p style="margin-bottom: 1.5em;">რეპორტის ფორმა (ცხრილი პროექტები × მენეჯერები × სართულები) იხსნება ფაილში <strong>report.html</strong>. იგი იქმნება მხოლოდ მაშინ, როცა ლოკალურად გაუშვებთ სკრიპტს.</p>
   <div class="step">
-    <strong>1.</strong> ტერმინალში გაუშვით:<br>
-    <code>node fetch-report.js</code>
+    <strong>1.</strong> კომპიუტერზე გახსენით პროექტის საქაღალდე, ტერმინალში შეიყვანეთ:<br>
+    <code>node fetch-report.js</code><br>
+    <span style="font-size:0.9em; color:#666;">(ეს ქმნის/განაახლებს report.html-ს)</span>
   </div>
   <div class="step">
-    <strong>2.</strong> რეპორტის ნახვა ბრაუზერში:<br>
-    <a href="report.html" class="btn">report.html-ის გახსნა</a>
+    <strong>2.</strong> რეპორტის ცხრილის ნახვა:<br>
+    <a href="report.html" class="btn">report.html – რეპორტის ფორმის გახსნა</a>
   </div>
-  <p style="color:#666; font-size:0.9em;">თუ ღილაკი არ იმუშავებს, ხელით გახსენით ფაილი <code>report.html</code> იმავე საქაღალდედან.</p>
+  <p style="color:#666; font-size:0.9em;">თუ ღილაკი 404-ს ან „NOT FOUND“-ს აჩვენებს: გახსენით ფაილი <code>report.html</code> <strong>კომპიუტერიდან</strong> (იმავე საქაღალდიდან, სადაც არის fetch-report.js), და უნდა ჯერ გაუშვებოდეთ ნაბიჯი 1. საიტზე (GitHub Pages / Vercel) report.html არ იტვირთება.</p>
 </body>
 </html>
