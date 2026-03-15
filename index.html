@@ -28,6 +28,10 @@
 <body>
   <h1>პროექტების მიხედვით სართულებზე მომაგრებული სერვის მენეჯერები</h1>
   <div class="toolbar">
+    <button type="button" class="btn" id="countBtn">ლისტი 82 – ჩანაწერების ზუსტი რაოდენობა</button>
+    <span id="countResult" style="margin-left:1em; font-weight:600;"></span>
+  </div>
+  <div class="toolbar">
     <button type="button" class="btn" id="loadBtn">რეპორტის ჩატვირთვა</button>
     <div id="status"></div>
   </div>
@@ -162,6 +166,39 @@
       );
     }
 
+    async function fetchTotalCount() {
+      const btn = document.getElementById('countBtn');
+      const el = document.getElementById('countResult');
+      btn.disabled = true;
+      el.textContent = 'იტვირთება…';
+      var total = 0;
+      var start = 0;
+      var page = 1;
+      var maxPages = 500;
+      try {
+        for (var i = 0; i < maxPages; i++) {
+          var r = await fetch(CONFIG.apiUrl + '?start=' + start);
+          if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+          var batch = await r.json();
+          if (!Array.isArray(batch)) throw new Error('არასწორი პასუხი');
+          if (batch.length === 0) break;
+          total += batch.length;
+          el.textContent = 'გვერდი ' + page + '… სულ ნაპოვნი: ' + total;
+          if (batch.length < CONFIG.pageSize) break;
+          start += CONFIG.pageSize;
+          page++;
+          await new Promise(function (res) { setTimeout(res, CONFIG.delayMs); });
+        }
+        el.textContent = 'ლისტი 82: სულ ' + total + ' ჩანაწერი';
+        el.style.color = '';
+      } catch (err) {
+        el.textContent = 'შეცდომა: ' + err.message;
+        el.style.color = '#c62828';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     async function loadReport() {
       const btn = document.getElementById('loadBtn');
       const status = document.getElementById('status');
@@ -218,6 +255,7 @@
     }
 
     document.getElementById('loadBtn').addEventListener('click', loadReport);
+    document.getElementById('countBtn').addEventListener('click', fetchTotalCount);
   </script>
 </body>
 </html>
