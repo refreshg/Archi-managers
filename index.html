@@ -33,9 +33,11 @@
   </div>
   <div class="toolbar">
     <button type="button" class="btn" id="loadBtn">რეპორტის ჩატვირთვა</button>
+    <button type="button" class="btn" id="debugBtn" style="background:#6a1b9a;">დებაგი – რა ჩანაწერი მოდის</button>
     <div id="status"></div>
   </div>
   <div id="report"></div>
+  <div id="debugOutput" style="display:none; margin-top:1em; padding:1em; background:#f5f5f5; border:1px solid #ccc; font-family:monospace; font-size:12px; white-space:pre-wrap; max-height:400px; overflow:auto;"></div>
 
   <script>
     const CONFIG = {
@@ -166,6 +168,59 @@
       );
     }
 
+    async function runDebug() {
+      var out = document.getElementById('debugOutput');
+      var btn = document.getElementById('debugBtn');
+      out.style.display = 'block';
+      out.textContent = 'დებაგი: იტვირთება…';
+      btn.disabled = true;
+      var url = CONFIG.apiUrl + '?start=0';
+      var lines = [];
+      lines.push('=== დებაგი: რა ჩანაწერი მოდის API-დან ===');
+      lines.push('მოთხოვნის URL: ' + url);
+      lines.push('');
+      try {
+        var r = await fetch(url);
+        lines.push('პასუხის სტატუსი: ' + r.status + ' ' + r.statusText);
+        var batch = await r.json();
+        if (!Array.isArray(batch)) {
+          lines.push('პასუხი არ არის მასივი: ' + typeof batch);
+          if (batch && batch.error) lines.push('შეცდომა: ' + (batch.error_description || batch.error));
+          out.textContent = lines.join('\n');
+          return;
+        }
+        lines.push('პირველი გვერდი (start=0): ჩანაწერების რაოდენობა = ' + batch.length);
+        if (batch.length > 0) {
+          var first = batch[0];
+          lines.push('');
+          lines.push('--- პირველი ჩანაწერის ველების სახელები ---');
+          lines.push(Object.keys(first).join(', '));
+          lines.push('');
+          lines.push('--- პირველი ჩანაწერი: ID, IBLOCK_ID, NAME (რომელი ლისტია) ---');
+          lines.push('ID: ' + (first.ID != null ? first.ID : '(არა)'));
+          lines.push('IBLOCK_ID: ' + (first.IBLOCK_ID != null ? first.IBLOCK_ID : '(არა)'));
+          lines.push('NAME: ' + (first.NAME != null ? first.NAME : '(არა)'));
+          if (first.IBLOCK_SECTION_ID != null) lines.push('IBLOCK_SECTION_ID: ' + first.IBLOCK_SECTION_ID);
+          lines.push('');
+          lines.push('--- პირველი 20 ჩანაწერის ID-ები (რომ შეადაროთ Bitrix-ს) ---');
+          var ids = batch.slice(0, 20).map(function (x) { return x.ID || x.id || '?'; });
+          lines.push(ids.join(', '));
+          lines.push('');
+          lines.push('კონსოლში (F12 → Console): პირველი ჩანაწერის სრული ობიექტი = window.__debugFirstRecord');
+          window.__debugFirstRecord = first;
+          window.__debugBatchSize = batch.length;
+          console.log('დებაგი: პირველი ჩანაწერი (სრულად)', first);
+          console.log('დებაგი: პირველი გვერდის ჩანაწერების რაოდენობა', batch.length);
+        }
+        out.textContent = lines.join('\n');
+      } catch (e) {
+        lines.push('შეცდომა: ' + e.message);
+        out.textContent = lines.join('\n');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     async function fetchTotalCount() {
       const btn = document.getElementById('countBtn');
       const el = document.getElementById('countResult');
@@ -256,6 +311,7 @@
 
     document.getElementById('loadBtn').addEventListener('click', loadReport);
     document.getElementById('countBtn').addEventListener('click', fetchTotalCount);
+    document.getElementById('debugBtn').addEventListener('click', runDebug);
   </script>
 </body>
 </html>
