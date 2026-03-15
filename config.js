@@ -13,6 +13,9 @@ module.exports = {
   // გვერდზე ჩანაწერების რაოდენობა (Bitrix24 ლიმიტი)
   pageSize: 50,
 
+  // მაქსიმუმ ჩანაწერი (null = ყველა)
+  maxRecords: 500,
+
   // დაყოვნება მოთხოვნებს შორის (ms) - რომ API არ გაჭედოს
   delayBetweenRequestsMs: 400,
 

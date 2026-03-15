@@ -12,6 +12,7 @@ const config = require('./config.js');
 
 const PAGE_SIZE = config.pageSize ?? 50;
 const DELAY_MS = config.delayBetweenRequestsMs ?? 400;
+const MAX_RECORDS = config.maxRecords ?? null;
 const API_BASE = config.apiBase;
 const LIST_ID = config.listId;
 
@@ -66,7 +67,7 @@ function fetchPage(start) {
 }
 
 /**
- * ყველა ჩანაწერის წამოღება გვერდებად, დაყოვნებით
+ * ჩანაწერების წამოღება გვერდებად, დაყოვნებით (maxRecords ლიმიტით)
  */
 async function fetchAllElements() {
   const all = [];
@@ -77,9 +78,11 @@ async function fetchAllElements() {
   while (true) {
     const batch = await fetchPage(start);
     if (batch.length === 0) break;
-    all.push(...batch);
+
+    const need = MAX_RECORDS == null ? batch.length : Math.min(batch.length, MAX_RECORDS - all.length);
+    all.push(...batch.slice(0, need));
     console.log(`გვერდი ${page}: ${batch.length} ჩანაწერი (სულ: ${all.length})`);
-    if (batch.length < PAGE_SIZE) break;
+    if (batch.length < PAGE_SIZE || (MAX_RECORDS != null && all.length >= MAX_RECORDS)) break;
     start += PAGE_SIZE;
     page++;
     await delay(DELAY_MS);
@@ -227,7 +230,7 @@ function escapeHtml(s) {
 
 async function main() {
   console.log('იწყება მონაცემების წამოღება (ლისტი 82)...');
-  console.log('გვერდის ზომა:', PAGE_SIZE, ', დაყოვნება:', DELAY_MS, 'ms\n');
+  console.log('გვერდის ზომა:', PAGE_SIZE, ', დაყოვნება:', DELAY_MS, 'ms', MAX_RECORDS ? `, ლიმიტი: ${MAX_RECORDS} ჩანაწერი` : '', '\n');
 
   let elements;
   try {
