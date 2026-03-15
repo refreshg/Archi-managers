@@ -46,17 +46,34 @@
       },
     };
 
+    var DEBUG_FIRST_ELEMENT = null;
+
     function getField(el, key) {
-      if (el[key] != null) return el[key];
-      const k = CONFIG.fields[key];
-      if (k && el[k] != null) return el[k];
+      const fieldId = (CONFIG.fields[key] || '').replace('PROPERTY_', '');
+      const tryKeys = fieldId ? [CONFIG.fields[key], 'PROPERTY_' + fieldId, fieldId, key] : [key];
+      for (const k of tryKeys) {
+        if (k && el[k] != null) return el[k];
+      }
+      if (el.properties && typeof el.properties === 'object') {
+        if (el.properties[CONFIG.fields[key]] != null) return el.properties[CONFIG.fields[key]];
+        if (el.properties[fieldId] != null) return el.properties[fieldId];
+      }
+      if (el.fields && typeof el.fields === 'object') {
+        if (el.fields[CONFIG.fields[key]] != null) return el.fields[CONFIG.fields[key]];
+      }
+      var num = { project: '430', floors: '1033', responsible: '434' }[key];
+      if (num) {
+        for (const k of Object.keys(el)) {
+          if (String(k).indexOf(num) !== -1 && el[k] != null) return el[k];
+        }
+      }
       return null;
     }
 
     function parseFloors(val) {
       if (val == null) return '';
-      if (Array.isArray(val)) return val.map(String).filter(Boolean).join(', ');
-      if (typeof val === 'object' && val.value != null) return String(val.value);
+      if (Array.isArray(val)) return val.map(function (v) { return typeof v === 'object' && v && v.value != null ? String(v.value) : String(v); }).filter(Boolean).join(', ');
+      if (typeof val === 'object') return String(val.value ?? val.text ?? val.name ?? '').trim();
       return String(val).trim();
     }
 
@@ -70,13 +87,20 @@
       return { key: String(key), name: String(name || '—'), email: String(email), number: String(number), internal: String(internal) };
     }
 
+    function unwrapVal(v) {
+      if (v == null) return v;
+      if (typeof v !== 'object') return v;
+      return v.value ?? v.text ?? v.name ?? v.title ?? v.NAME ?? v.VALUE ?? (Array.isArray(v) ? v[0] : null);
+    }
+
     function parseElement(el) {
-      let project = getField(el, 'project') ?? getField(el, 'NAME') ?? '';
+      let project = unwrapVal(getField(el, 'project')) ?? unwrapVal(getField(el, 'NAME')) ?? '';
       if (project && typeof project === 'object') project = project.name ?? project.title ?? project.value ?? project.NAME ?? '';
+      project = String(project || '').trim();
       const floorsRaw = getField(el, 'floors');
-      const floorRange = parseFloors(floorsRaw);
+      const floorRange = parseFloors(unwrapVal(floorsRaw) ?? floorsRaw);
       const responsibleRaw = getField(el, 'responsible');
-      const manager = parseManager(responsibleRaw);
+      const manager = parseManager(unwrapVal(responsibleRaw) ?? responsibleRaw);
       return {
         project: String(project).trim(),
         floorRange,
@@ -91,13 +115,12 @@
         const { project, floorRange, manager } = parseElement(el);
         if (!project) continue;
         const floorStr = (floorRange || '').trim();
-        if (!floorStr) continue;
         const key = manager.key;
         managersMap.set(key, manager);
         if (!byProject.has(project)) byProject.set(project, new Map());
         const managers = byProject.get(project);
         if (!managers.has(key)) managers.set(key, []);
-        managers.get(key).push(floorStr);
+        if (floorStr) managers.get(key).push(floorStr);
       }
       const managers = Array.from(managersMap.entries()).sort((a, b) => (a[1].name || a[0]).localeCompare((b[1].name || b[0]), 'ka'));
       const projects = Array.from(byProject.keys()).sort((a, b) => a.localeCompare(b, 'ka'));
@@ -175,8 +198,15 @@
           return;
         }
 
+        DEBUG_FIRST_ELEMENT = all[0];
         const pivot = buildPivot(all);
-        report.innerHTML = renderTable(pivot);
+        if (pivot.projects.length === 0 || pivot.managers.length === 0) {
+          console.log('პირველი ჩანაწერის სტრუქტურა (API პასუხი):', DEBUG_FIRST_ELEMENT);
+          var keys = DEBUG_FIRST_ELEMENT ? Object.keys(DEBUG_FIRST_ELEMENT) : [];
+          report.innerHTML = '<div class="error" style="margin:1em 0;">პროექტები/მენეჯერები ვერ მოიძებნა. ველების სახელები ჩანაწერში: <code>' + keys.join(', ') + '</code>. გახსენით ბრაუზერის კონსოლი (F12) → Console, იქ იხილეთ პირველი ჩანაწერის სრული ობიექტი.</div>' + (pivot.projects.length ? renderTable(pivot) : '');
+        } else {
+          report.innerHTML = renderTable(pivot);
+        }
         status.textContent = 'დასრულებული. ჩანაწერები: ' + all.length + ', პროექტები: ' + pivot.projects.length + ', მენეჯერები: ' + pivot.managers.length;
       } catch (err) {
         status.textContent = 'შეცდომა: ' + err.message;
