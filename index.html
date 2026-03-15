@@ -5,26 +5,169 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>სერვის მენეჯერების რეპორტი</title>
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; max-width: 500px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; }
     h1 { color: #1565c0; }
-    .step { margin: 1em 0; padding: 1em; background: #e3f2fd; border-radius: 8px; }
-    code { background: #fff; padding: 2px 6px; border-radius: 4px; }
-    a.btn { display: inline-block; margin-top: 1em; padding: 12px 24px; background: #1565c0; color: #fff; text-decoration: none; border-radius: 8px; }
-    a.btn:hover { background: #0d47a1; }
+    .toolbar { margin: 1em 0; }
+    .btn { padding: 12px 24px; background: #1565c0; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; }
+    .btn:hover { background: #0d47a1; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    #status { margin: 0.5em 0; color: #666; min-height: 1.5em; }
+    #report { overflow-x: auto; margin-top: 1em; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; }
+    thead th { background: #1565c0; color: #fff; }
+    tbody tr:nth-child(even) { background: #f5f5f5; }
+    tbody tr:nth-child(odd) { background: #fff; }
+    td.filled { background: #e3f2fd; }
+    .error { color: #c62828; }
   </style>
 </head>
 <body>
-  <h1>სერვის მენეჯერების რეპორტი</h1>
-  <p style="margin-bottom: 1.5em;">რეპორტის ფორმა (ცხრილი პროექტები × მენეჯერები × სართულები) იხსნება ფაილში <strong>report.html</strong>. იგი იქმნება მხოლოდ მაშინ, როცა ლოკალურად გაუშვებთ სკრიპტს.</p>
-  <div class="step">
-    <strong>1.</strong> კომპიუტერზე გახსენით პროექტის საქაღალდე, ტერმინალში შეიყვანეთ:<br>
-    <code>node fetch-report.js</code><br>
-    <span style="font-size:0.9em; color:#666;">(ეს ქმნის/განაახლებს report.html-ს)</span>
+  <h1>პროექტების მიხედვით სართულებზე მომაგრებული სერვის მენეჯერები</h1>
+  <div class="toolbar">
+    <button type="button" class="btn" id="loadBtn">რეპორტის ჩატვირთვა</button>
+    <div id="status"></div>
   </div>
-  <div class="step">
-    <strong>2.</strong> რეპორტის ცხრილის ნახვა:<br>
-    <a href="report.html" class="btn">report.html – რეპორტის ფორმის გახსნა</a>
-  </div>
-  <p style="color:#666; font-size:0.9em;">თუ ღილაკი 404-ს ან „NOT FOUND“-ს აჩვენებს: გახსენით ფაილი <code>report.html</code> <strong>კომპიუტერიდან</strong> (იმავე საქაღალდიდან, სადაც არის fetch-report.js), და უნდა ჯერ გაუშვებოდეთ ნაბიჯი 1. საიტზე (GitHub Pages / Vercel) report.html არ იტვირთება.</p>
+  <div id="report"></div>
+
+  <script>
+    const CONFIG = {
+      apiUrl: '/api/report',
+      pageSize: 50,
+      maxRecords: 500,
+      delayMs: 400,
+      fields: {
+        project: 'PROPERTY_1472',
+        floorFrom: 'PROPERTY_1474',
+        floorTo: 'PROPERTY_1476',
+        responsible: 'PROPERTY_1478',
+      },
+    };
+
+    function getField(el, key) {
+      if (el[key] != null) return el[key];
+      const k = CONFIG.fields[key];
+      if (k && el[k] != null) return el[k];
+      return null;
+    }
+
+    function parseElement(el) {
+      let project = getField(el, 'project') ?? getField(el, 'NAME') ?? '';
+      if (project && typeof project === 'object') project = project.name ?? project.title ?? project.value ?? project.NAME ?? '';
+      const floorFrom = parseInt(getField(el, 'floorFrom'), 10);
+      const floorTo = parseInt(getField(el, 'floorTo'), 10);
+      let responsible = getField(el, 'responsible') ?? '';
+      if (responsible && typeof responsible === 'object') responsible = responsible.title || responsible.value || responsible.NAME || '';
+      const fromOk = Number.isFinite(floorFrom);
+      const toOk = Number.isFinite(floorTo);
+      let floorRange = '';
+      if (fromOk && toOk) floorRange = floorFrom === floorTo ? String(floorFrom) : floorFrom + '-' + floorTo;
+      else if (fromOk) floorRange = String(floorFrom);
+      else if (toOk) floorRange = String(floorTo);
+      return {
+        project: String(project).trim(),
+        floorRange,
+        responsible: String(responsible).trim() || '—',
+      };
+    }
+
+    function buildPivot(elements) {
+      const byProject = new Map();
+      const managersSet = new Set();
+      for (const el of elements) {
+        const { project, floorRange, responsible } = parseElement(el);
+        if (!project || !floorRange) continue;
+        managersSet.add(responsible);
+        if (!byProject.has(project)) byProject.set(project, new Map());
+        const managers = byProject.get(project);
+        if (!managers.has(responsible)) managers.set(responsible, []);
+        managers.get(responsible).push(floorRange);
+      }
+      const managers = Array.from(managersSet).sort((a, b) => (a + '').localeCompare(b + '', 'ka'));
+      const projects = Array.from(byProject.keys()).sort((a, b) => a.localeCompare(b, 'ka'));
+      return { projects, managers, byProject };
+    }
+
+    function mergeRanges(ranges) {
+      const uniq = [...new Set(ranges)].filter(Boolean).sort((a, b) => (a + '').localeCompare(b + '', undefined, { numeric: true }));
+      return uniq.join(', ');
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderTable(pivot) {
+      const { projects, managers, byProject } = pivot;
+      const headCells = managers.map(m => '<th scope="col">' + escapeHtml(m) + '</th>').join('');
+      const rows = projects.map(project => {
+        const cells = managers.map(manager => {
+          const ranges = byProject.get(project)?.get(manager) ?? [];
+          const text = mergeRanges(ranges);
+          return '<td class="' + (text ? 'filled' : '') + '">' + escapeHtml(text) + '</td>';
+        });
+        return '<tr><th scope="row">' + escapeHtml(project) + '</th>' + cells.join('') + '</tr>';
+      });
+      return (
+        '<p style="color:#666;">განახლება: ' + new Date().toLocaleString('ka-GE') + '</p>' +
+        '<table><thead><tr><th>პროექტი</th>' + headCells + '</tr></thead><tbody>' + rows.join('') + '</tbody></table>'
+      );
+    }
+
+    async function loadReport() {
+      const btn = document.getElementById('loadBtn');
+      const status = document.getElementById('status');
+      const report = document.getElementById('report');
+      btn.disabled = true;
+      report.innerHTML = '';
+      status.textContent = 'იტვირთება…';
+      status.className = '';
+
+      const all = [];
+      let start = 0;
+      let page = 1;
+
+      try {
+        for (;;) {
+          const url = CONFIG.apiUrl + '?start=' + start;
+          const r = await fetch(url);
+          if (!r.ok) throw new Error('მოთხოვნა ვერ შესრულდა: ' + r.status + ' ' + r.statusText);
+          const batch = await r.json();
+          if (!Array.isArray(batch)) throw new Error('არასწორი პასუხის ფორმატი');
+          if (batch.length === 0) break;
+          const need = CONFIG.maxRecords == null ? batch.length : Math.min(batch.length, CONFIG.maxRecords - all.length);
+          all.push(...batch.slice(0, need));
+          status.textContent = 'გვერდი ' + page + ': ' + batch.length + ' ჩანაწერი (სულ: ' + all.length + ')';
+          if (batch.length < CONFIG.pageSize || (CONFIG.maxRecords != null && all.length >= CONFIG.maxRecords)) break;
+          start += CONFIG.pageSize;
+          page++;
+          await new Promise(r => setTimeout(r, CONFIG.delayMs));
+        }
+
+        if (all.length === 0) {
+          status.textContent = 'ჩანაწერი არ მოიძებნა.';
+          status.className = 'error';
+          return;
+        }
+
+        const pivot = buildPivot(all);
+        report.innerHTML = renderTable(pivot);
+        status.textContent = 'დასრულებული. ჩანაწერები: ' + all.length + ', პროექტები: ' + pivot.projects.length + ', მენეჯერები: ' + pivot.managers.length;
+      } catch (err) {
+        status.textContent = 'შეცდომა: ' + err.message;
+        status.className = 'error';
+        report.innerHTML = '<p class="error">თუ 404-ს ხედავთ, საიტი უნდა იყოს დეპლოირებული (მაგ. Vercel-ზე), რათა /api/report იმუშაოს.</p>';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('loadBtn').addEventListener('click', loadReport);
+  </script>
 </body>
 </html>
